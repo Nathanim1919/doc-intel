@@ -150,6 +150,32 @@ def insert_extraction_fields(
     """Bulk-insert extraction_fields rows."""
     if not fields:
         return
+
+    import validator
+
+    rows = []
+    for f in fields:
+        # If computed_confidence and validation_status are precomputed, use them
+        raw_conf = f.get("confidence", 0.0)
+        computed_conf = f.get("computed_confidence")
+        status = f.get("validation_status")
+
+        if computed_conf is None or status is None:
+            computed_conf, status = validator.validate_field(f["field_name"], f.get("value"), raw_conf)
+
+        rows.append(
+            (
+                str(uuid.uuid4()),
+                run_id,
+                f["field_name"],
+                f.get("value"),
+                raw_conf,
+                computed_conf,
+                status,
+                f.get("page_number"),
+            )
+        )
+
     with conn.cursor() as cur:
         cur.executemany(
             """
@@ -158,27 +184,15 @@ def insert_extraction_fields(
                  raw_confidence, computed_confidence, validation_status, page_number)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """,
-            [
-                (
-                    str(uuid.uuid4()),
-                    run_id,
-                    f["field_name"],
-                    f["value"],
-                    f["confidence"],
-                    f["confidence"],   # computed_confidence = raw for now
-                    _validation_status(f["confidence"]),
-                    f.get("page_number"),
-                )
-                for f in fields
-            ],
+            rows,
         )
     conn.commit()
 
 
 def _validation_status(confidence: float) -> str:
-    """Simple threshold-based validation for Phase 1."""
+    """Threshold-based validation fallback."""
     if confidence >= 0.85:
         return "PASSED"
     if confidence >= 0.50:
-        return "SKIPPED"  # uncertain — flag for review
+        return "SKIPPED"
     return "FAILED"

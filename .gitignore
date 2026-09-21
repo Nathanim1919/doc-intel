@@ -5,3 +5,7 @@ minio/
 *.exe
 *.test
 bin/
+__pycache__/
+*.pyc
+node_modules/
+.next/

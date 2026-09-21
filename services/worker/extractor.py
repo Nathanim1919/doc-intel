@@ -59,18 +59,40 @@ class ExtractionResult(BaseModel):
 # Prompt
 # ---------------------------------------------------------------------------
 
-SYSTEM_INSTRUCTION = """You are a high-precision document extraction engine.
+SYSTEM_INSTRUCTION = """You are a high-precision document extraction engine specializing in commercial invoices, fiscal receipts, and contracts, including bilingual English and Amharic (Ethiopian / Ge'ez script) documents.
+
 Your job is to extract every meaningful structured field from the provided document image or PDF.
 
-Rules:
-- Use canonical snake_case for field names (e.g. vendor_name, invoice_date, total_amount).
+General Extraction Rules:
+- Use canonical snake_case for field names (e.g. seller_name, invoice_date, total_amount).
 - If a field value is partially visible or low-confidence, still extract it but set confidence accordingly.
 - Never invent data. If a field does not exist in the document, omit it — do not include null values for missing fields.
 - page_number is 1-based. Set to null only if genuinely unknown.
 - Your response MUST be valid JSON matching the provided schema exactly.
+
+Ethiopian & Amharic Document Rules:
+1. Fiscal Identifiers:
+   - Extract TIN (የግብር ከፋይ መለያ ቁጥር) as 'tin_number'. Ensure all 10 digits are preserved accurately.
+   - Extract VAT registration number (የተጨማሪ እሴት ታክስ ምዝገባ ቁጥር) as 'vat_number'.
+   - Extract Machine Registration Code (የማሽን ምዝገባ ቁጥር) as 'mrc_number'.
+   - Extract Fiscal Receipt sequence number (ደረሰኝ ቁጥር / FS No.) as 'fs_number'.
+2. Dates & Calendars:
+   - For Ethiopian Calendar dates (containing 'ዓ.ም', 'ዓ/ም', or Amharic months: መስከረም, ጥቅምት, ኅዳር, ታኅሣሥ, ጥር, የካቲት, መጋቢት, ሚያዝያ, ግንቦት, ሰኔ, ሐምሌ, ነሐሴ, ጳጉሜ), extract the raw string into 'invoice_date_ethiopian'.
+   - If a Gregorian date is also present or can be reliably inferred, extract it into 'invoice_date_gregorian' (YYYY-MM-DD).
+3. Currency & Amounts (Ethiopian Birr / ETB / ብር):
+   - Extract numeric amounts as clean numbers (e.g. "1500.00") without currency symbols or commas into:
+     * 'subtotal_etb' (pre-tax amount / ከመቀነሱ በፊት)
+     * 'vat_15_etb' (15% VAT amount / ተጨማሪ እሴት ታክስ 15%)
+     * 'withholding_tax_etb' (if withholding tax is deducted)
+     * 'total_amount_etb' (grand total / ጠቅላላ ድምር)
+4. Official Stamps & Signatures:
+   - Inspect the document for physical rubber ink stamps (ማኅተም). If present, output 'stamp_detected' as 'true' and extract readable text inside the stamp into 'stamp_organization'. If absent, output 'stamp_detected' as 'false'.
+   - If an authorized signature is present, output 'signature_detected' as 'true'.
+5. Script Preservation:
+   - Accurately preserve Amharic/Ge'ez text for company names (e.g. 'ሻጭ' / 'ገዥ'), descriptions, and locations.
 """
 
-USER_PROMPT = "Extract all structured fields from this document."
+USER_PROMPT = """Extract all structured key-value fields from this document. If this is an Ethiopian receipt or invoice, adhere to the fiscal identification, Ethiopian calendar date (ዓ.ም), ETB currency amounts, and stamp verification rules."""
 
 
 # ---------------------------------------------------------------------------

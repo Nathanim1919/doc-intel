@@ -37,6 +37,7 @@ from minio.error import S3Error
 from config import Config
 import db as store
 from extractor import Extractor
+import validator
 
 logger = logging.getLogger(__name__)
 
@@ -95,7 +96,11 @@ class Worker:
     # -----------------------------------------------------------------------
 
     def _tick(self) -> None:
-        result = self._redis.brpop(self._cfg.queue_key, timeout=self._cfg.brpop_timeout)
+        try:
+            result = self._redis.brpop(self._cfg.queue_key, timeout=self._cfg.brpop_timeout)
+        except (redis_lib.exceptions.TimeoutError, TimeoutError):
+            return  # timeout waiting for work — normal idle behavior
+
         if result is None:
             return  # timeout — loop again
 
@@ -173,23 +178,44 @@ class Worker:
                 error=None,
             )
 
-            # 6. Write extraction_fields
+            # 6. Apply regional validation rules and write extraction_fields
+            validated_fields = []
+            fields_dict: dict[str, str | None] = {}
+            for f in result.fields:
+                computed_conf, status = validator.validate_field(f.field_name, f.value, f.confidence)
+                validated_fields.append({
+                    "field_name": f.field_name,
+                    "value": f.value,
+                    "confidence": f.confidence,
+                    "computed_confidence": computed_conf,
+                    "validation_status": status,
+                    "page_number": f.page_number,
+                })
+                fields_dict[f.field_name] = f.value
+
+            # Arithmetic checks on financial amounts
+            math_warnings = validator.validate_document_math(fields_dict)
+            if math_warnings:
+                for w in math_warnings:
+                    log.warning("Regional validation warning: %s", w)
+
             store.insert_extraction_fields(
                 conn,
                 run_id,
-                [f.model_dump() for f in result.fields],
+                validated_fields,
             )
 
             # 7. Decide final document status
-            has_failed_fields = any(
-                store._validation_status(f.confidence) == "FAILED"
-                for f in result.fields
-            )
+            has_failed_fields = any(f["validation_status"] == "FAILED" for f in validated_fields)
+            if math_warnings:
+                # Discrepancy in totals requires human review
+                has_failed_fields = True
+
             final_doc_status = "REVIEW_REQUIRED" if has_failed_fields else "COMPLETED"
 
             store.mark_job_completed(conn, job_id)
             store.advance_document_status(conn, doc_id, final_doc_status)
-            log.info("Job COMPLETED — doc_status=%s", final_doc_status)
+            log.info("Job COMPLETED — doc_status=%s (math_warnings=%d)", final_doc_status, len(math_warnings))
 
         except ValueError as exc:
             # Malformed model output — record the run as FAILED
