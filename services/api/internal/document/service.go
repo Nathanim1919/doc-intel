@@ -118,7 +118,9 @@ func (s *Service) Upload(ctx context.Context, input UploadInput) (*UploadResult,
 		return nil, fmt.Errorf("document: store upload: %w", err)
 	}
 
-	// 4. Atomic DB transaction: create document + job + advance status
+	// 4. Pre-generate IDs so we can enqueue before the DB transaction.
+	jobID := uuid.New()
+
 	doc := &models.Document{
 		ID:         docID,
 		OwnerID:    input.OwnerID,
@@ -130,26 +132,33 @@ func (s *Service) Upload(ctx context.Context, input UploadInput) (*UploadResult,
 		Status:     models.StatusUploaded,
 	}
 
-	jobID := uuid.New() // pre-generate so we can embed in the queue payload
+	// 5. Enqueue BEFORE committing to DB.
+	//
+	// Why: if we enqueue after commit and Redis fails, the document is stuck
+	// in QUEUED forever (no worker picks it up). Flipping the order means:
+	//   - Redis fails  → we return 500 before touching the DB. Client retries
+	//                    clean; no stale state exists anywhere.
+	//   - DB fails     → ghost message sits in Redis. Worker pops it, queries
+	//                    DB by job_id, finds nothing, discards it. Zero harm.
+	//   - Both succeed → normal path.
+	//
+	// This works because the worker ALWAYS validates against the DB before
+	// doing any real work. A ghost Redis message is a no-op.
+	payload := models.QueuePayload{
+		JobID:      jobID,
+		DocumentID: docID,
+		StorageKey: storageKey,
+		MimeType:   input.MimeType,
+	}
+	if err := s.queue.Enqueue(ctx, payload); err != nil {
+		return nil, fmt.Errorf("document: enqueue: %w", err)
+	}
 
+	// 6. Atomic DB transaction: create document + job + advance status.
+	//    If this fails, the Redis message is a ghost — harmless (see above).
 	doc, job, err := s.createDocumentAndJob(ctx, doc, jobID)
 	if err != nil {
 		return nil, fmt.Errorf("document: create: %w", err)
-	}
-
-	// 5. Enqueue — after commit. Safe to fail; reconciler will retry.
-	payload := models.QueuePayload{
-		JobID:      job.ID,
-		DocumentID: doc.ID,
-		StorageKey: doc.StorageKey,
-		MimeType:   doc.MimeType,
-	}
-	if err := s.queue.Enqueue(ctx, payload); err != nil {
-		// Log but don't fail the request. The document is committed.
-		// The reconciler (Phase 2) will detect QUEUED documents with no
-		// active Redis entry and re-enqueue them.
-		// TODO: replace with structured logger
-		fmt.Printf("warn: enqueue failed for job %s: %v\n", job.ID, err)
 	}
 
 	return &UploadResult{Document: doc, Job: job, IsDupe: false}, nil
