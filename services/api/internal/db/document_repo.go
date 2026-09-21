@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -169,10 +168,9 @@ type rowScanner interface {
 }
 
 func scanRow(r rowScanner, doc *models.Document) error {
-	var updatedAt time.Time
 	return r.Scan(
 		&doc.ID, &doc.OwnerID, &doc.Filename, &doc.MimeType, &doc.SizeBytes,
-		&doc.StorageKey, &doc.FileHash, &doc.Status, &doc.CreatedAt, &updatedAt,
+		&doc.StorageKey, &doc.FileHash, &doc.Status, &doc.CreatedAt, &doc.UpdatedAt,
 	)
 }
 
