@@ -73,7 +73,10 @@ services:
 
 
     worker:
-      build: ./services/worker
+      build:
+        context: ./services/worker
+        network: host
+      image: doc-intel-worker
       restart: always
       env_file:
         - .env

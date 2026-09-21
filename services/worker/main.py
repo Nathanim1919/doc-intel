@@ -1,11 +1,24 @@
-import os
-import time
+"""Entry point for the doc-intel worker service."""
+
+import logging
 import sys
 
-def main():
-    print("Worker service initialized. Waiting for jobs...", flush=True)
-    while True:
-        time.sleep(10)
+from config import Config
+from worker import Worker
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s [%(name)s] %(message)s",
+        stream=sys.stdout,
+        force=True,
+    )
+
+    cfg = Config()
+    w = Worker(cfg)
+    w.run()
+
 
 if __name__ == "__main__":
     main()
