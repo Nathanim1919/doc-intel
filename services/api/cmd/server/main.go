@@ -61,9 +61,10 @@ func main() {
 	docRepo := db.NewDocumentRepository(pool)
 	jobRepo := db.NewJobRepository(pool)
 	userRepo := db.NewUserRepository(pool)
+	extractionRepo := db.NewExtractionRepository(pool)
 
 	// --- Service ---
-	docService := document.New(pool, docRepo, jobRepo, store, producer)
+	docService := document.New(pool, docRepo, jobRepo, extractionRepo, store, producer)
 
 	// --- HTTP Router ---
 	h := handler.New(docService, userRepo, pool, redisClient)

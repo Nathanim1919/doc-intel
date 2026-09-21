@@ -32,9 +32,9 @@ func (r *JobRepository) WithTx(tx pgx.Tx) *JobRepository {
 // it can be embedded in the Redis payload before the transaction commits.
 func (r *JobRepository) CreateJob(ctx context.Context, job *models.ProcessingJob) (*models.ProcessingJob, error) {
 	const q = `
-		INSERT INTO processing_jobs (id, document_id, status, attempt)
+		INSERT INTO processing_jobs (id, document_id, status, attempt_count)
 		VALUES ($1, $2, $3, 0)
-		RETURNING id, document_id, status, attempt, started_at, completed_at, error, created_at
+		RETURNING id, document_id, status, attempt_count, started_at, completed_at, error, created_at
 	`
 	if job.ID == uuid.Nil {
 		job.ID = uuid.New()
@@ -51,7 +51,7 @@ func (r *JobRepository) CreateJob(ctx context.Context, job *models.ProcessingJob
 // GetByDocumentID retrieves the most recent job for a document.
 func (r *JobRepository) GetByDocumentID(ctx context.Context, documentID uuid.UUID) (*models.ProcessingJob, error) {
 	const q = `
-		SELECT id, document_id, status, attempt, started_at, completed_at, error, created_at
+		SELECT id, document_id, status, attempt_count, started_at, completed_at, error, created_at
 		FROM processing_jobs
 		WHERE document_id = $1
 		ORDER BY created_at DESC
@@ -71,7 +71,7 @@ func (r *JobRepository) GetByDocumentID(ctx context.Context, documentID uuid.UUI
 // GetByID retrieves a job by its primary key.
 func (r *JobRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.ProcessingJob, error) {
 	const q = `
-		SELECT id, document_id, status, attempt, started_at, completed_at, error, created_at
+		SELECT id, document_id, status, attempt_count, started_at, completed_at, error, created_at
 		FROM processing_jobs
 		WHERE id = $1
 	`
@@ -89,7 +89,7 @@ func (r *JobRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Proc
 func scanJob(row pgx.Row) (*models.ProcessingJob, error) {
 	job := &models.ProcessingJob{}
 	err := row.Scan(
-		&job.ID, &job.DocumentID, &job.Status, &job.Attempt,
+		&job.ID, &job.DocumentID, &job.Status, &job.AttemptCount,
 		&job.StartedAt, &job.CompletedAt, &job.Error, &job.CreatedAt,
 	)
 	if err != nil {

@@ -1,6 +1,5 @@
 package models
 
-
 import (
 	"time"
 
@@ -42,14 +41,14 @@ type Document struct {
 }
 
 type ProcessingJob struct {
-	ID          uuid.UUID  `json:"id"`
-	DocumentID  uuid.UUID  `json:"document_id"`
-	Status      string     `json:"status"`
-	Attempt     int        `json:"attempt"`
-	StartedAt   *time.Time `json:"started_at,omitempty"`
-	CompletedAt *time.Time `json:"completed_at,omitempty"`
-	Error       *string    `json:"error,omitempty"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID           uuid.UUID  `json:"id"`
+	DocumentID   uuid.UUID  `json:"document_id"`
+	Status       string     `json:"status"`
+	AttemptCount int        `json:"attempt_count"`
+	StartedAt    *time.Time `json:"started_at,omitempty"`
+	CompletedAt  *time.Time `json:"completed_at,omitempty"`
+	Error        *string    `json:"error,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
 }
 
 type ExtractionField struct {
@@ -61,6 +60,21 @@ type ExtractionField struct {
 	ComputedConfidence *float64  `json:"computed_confidence,omitempty"`
 	ValidationStatus   string    `json:"validation_status"`
 	PageNumber         *int      `json:"page_number,omitempty"`
+}
+
+// ExtractionRun is per-model-invocation metadata.
+type ExtractionRun struct {
+	ID            uuid.UUID  `json:"id"`
+	DocumentID    uuid.UUID  `json:"document_id"`
+	JobID         uuid.UUID  `json:"job_id"`
+	Model         string     `json:"model"`
+	ModelVersion  string     `json:"model_version"`
+	PromptVersion string     `json:"prompt_version"`
+	Status        string     `json:"status"`
+	LatencyMs     *int       `json:"latency_ms,omitempty"`
+	TokensUsed    *int       `json:"tokens_used,omitempty"`
+	Error         *string    `json:"error,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
 }
 
 // QueuePayload is pushed to Redis for workers to consume

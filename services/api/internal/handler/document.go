@@ -183,6 +183,27 @@ func (h *Handler) GetDocumentStatus(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// GetDocumentResults handles GET /v1/documents/{id}/results
+// Returns the latest extraction run metadata and all extracted fields for the document.
+func (h *Handler) GetDocumentResults(w http.ResponseWriter, r *http.Request) {
+	docID, ok := parseUUID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+
+	results, err := h.svc.GetExtractionResults(r.Context(), docID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "no extraction results found for document")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to retrieve extraction results")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toExtractionResultsResponse(results))
+}
+
 // ListDocuments handles GET /v1/documents?status=QUEUED
 func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	user := middleware.UserFromContext(r.Context())
@@ -241,6 +262,69 @@ func toDocumentResponse(d *models.Document) documentResponse {
 		Status:    d.Status,
 		CreatedAt: d.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
 		UpdatedAt: d.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+}
+
+type extractionRunResponse struct {
+	ID            string  `json:"id"`
+	JobID         string  `json:"job_id"`
+	Model         string  `json:"model"`
+	ModelVersion  string  `json:"model_version,omitempty"`
+	PromptVersion string  `json:"prompt_version"`
+	Status        string  `json:"status"`
+	LatencyMs     *int    `json:"latency_ms,omitempty"`
+	TokensUsed    *int    `json:"tokens_used,omitempty"`
+	Error         *string `json:"error,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+}
+
+type extractionFieldResponse struct {
+	ID                 string   `json:"id"`
+	FieldName          string   `json:"field_name"`
+	Value              *string  `json:"value,omitempty"`
+	RawConfidence      *float64 `json:"raw_confidence,omitempty"`
+	ComputedConfidence *float64 `json:"computed_confidence,omitempty"`
+	ValidationStatus   string   `json:"validation_status"`
+	PageNumber         *int     `json:"page_number,omitempty"`
+}
+
+type extractionResultsResponse struct {
+	DocumentID string                    `json:"document_id"`
+	Run        extractionRunResponse     `json:"run"`
+	Fields     []extractionFieldResponse `json:"fields"`
+}
+
+func toExtractionResultsResponse(res *document.ExtractionResults) extractionResultsResponse {
+	run := extractionRunResponse{
+		ID:            res.Run.ID.String(),
+		JobID:         res.Run.JobID.String(),
+		Model:         res.Run.Model,
+		ModelVersion:  res.Run.ModelVersion,
+		PromptVersion: res.Run.PromptVersion,
+		Status:        res.Run.Status,
+		LatencyMs:     res.Run.LatencyMs,
+		TokensUsed:    res.Run.TokensUsed,
+		Error:         res.Run.Error,
+		CreatedAt:     res.Run.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+	}
+
+	fields := make([]extractionFieldResponse, len(res.Fields))
+	for i, f := range res.Fields {
+		fields[i] = extractionFieldResponse{
+			ID:                 f.ID.String(),
+			FieldName:          f.FieldName,
+			Value:              f.Value,
+			RawConfidence:      f.RawConfidence,
+			ComputedConfidence: f.ComputedConfidence,
+			ValidationStatus:   f.ValidationStatus,
+			PageNumber:         f.PageNumber,
+		}
+	}
+
+	return extractionResultsResponse{
+		DocumentID: res.DocumentID.String(),
+		Run:        run,
+		Fields:     fields,
 	}
 }
 

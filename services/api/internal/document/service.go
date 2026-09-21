@@ -30,11 +30,12 @@ var ErrDuplicate = errors.New("document: duplicate upload")
 // The handler never touches the pool, repos, or Redis directly.
 // This keeps the handler thin and testable (mock the Service interface).
 type Service struct {
-	pool    *pgxpool.Pool
-	docRepo *db.DocumentRepository
-	jobRepo *db.JobRepository
-	store   storage.ObjectStorage
-	queue   queue.Producer
+	pool           *pgxpool.Pool
+	docRepo        *db.DocumentRepository
+	jobRepo        *db.JobRepository
+	extractionRepo *db.ExtractionRepository
+	store          storage.ObjectStorage
+	queue          queue.Producer
 }
 
 // New constructs a Service. All dependencies are required.
@@ -42,15 +43,17 @@ func New(
 	pool *pgxpool.Pool,
 	docRepo *db.DocumentRepository,
 	jobRepo *db.JobRepository,
+	extractionRepo *db.ExtractionRepository,
 	store storage.ObjectStorage,
 	q queue.Producer,
 ) *Service {
 	return &Service{
-		pool:    pool,
-		docRepo: docRepo,
-		jobRepo: jobRepo,
-		store:   store,
-		queue:   q,
+		pool:           pool,
+		docRepo:        docRepo,
+		jobRepo:        jobRepo,
+		extractionRepo: extractionRepo,
+		store:          store,
+		queue:          q,
 	}
 }
 
@@ -225,6 +228,33 @@ func (s *Service) GetJobByDocument(ctx context.Context, docID uuid.UUID) (*model
 // GetJobByID retrieves a job by its primary key.
 func (s *Service) GetJobByID(ctx context.Context, id uuid.UUID) (*models.ProcessingJob, error) {
 	return s.jobRepo.GetByID(ctx, id)
+}
+
+// ExtractionResults bundles the latest run metadata and extracted fields for a document.
+type ExtractionResults struct {
+	DocumentID uuid.UUID                 `json:"document_id"`
+	Run        *models.ExtractionRun     `json:"run"`
+	Fields     []*models.ExtractionField `json:"fields"`
+}
+
+// GetExtractionResults fetches the latest extraction run and its fields for a document.
+// Returns db.ErrNotFound if the document has not yet completed extraction.
+func (s *Service) GetExtractionResults(ctx context.Context, docID uuid.UUID) (*ExtractionResults, error) {
+	run, err := s.extractionRepo.GetLatestRunByDocument(ctx, docID)
+	if err != nil {
+		return nil, err
+	}
+
+	fields, err := s.extractionRepo.GetFieldsByRun(ctx, run.ID)
+	if err != nil {
+		return nil, fmt.Errorf("document: get fields for run: %w", err)
+	}
+
+	return &ExtractionResults{
+		DocumentID: docID,
+		Run:        run,
+		Fields:     fields,
+	}, nil
 }
 
 // --- helpers ----------------------------------------------------------------
