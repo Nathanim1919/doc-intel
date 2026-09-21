@@ -1,6 +1,6 @@
 services:
     postgres_db:
-        image: postgres:15.0.1
+        image: postgres:16-alpine
         environment:
             - POSTGRES_USER=${POSTGRES_USER}
             - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -9,13 +9,14 @@ services:
             - "${POSTGRES_PORT}:5432"
         volumes:
             - ./pgdata:/var/lib/postgresql/data
+            - ./migrations:/docker-entrypoint-initdb.d:ro
 
         healthcheck:
-            test: ['pg_isready', '-U', '${POSTGRES_USER}']
-            interval: 10s
+            test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+            interval: 5s
             timeout: 5s
             retries: 5
-            start_period: 30s
+            start_period: 5s
     
     redis:
         image: redis:7
@@ -24,11 +25,11 @@ services:
         volumes:
             - ./redis:/data
         healthcheck:
-            test: ['redis-cli', 'ping']
-            interval: 10s
+            test: ["CMD", "redis-cli", "ping"]
+            interval: 5s
             timeout: 5s
             retries: 5
-            start_period: 30s
+            start_period: 5s
 
     minio:
         image: minio/minio:latest
@@ -42,11 +43,11 @@ services:
             - MINIO_ROOT_USER=${MINIO_ROOT_USER}
             - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
         healthcheck:
-            test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-            interval: 1m30s
-            timeout: 30s
+            test: ["CMD", "mc", "ready", "local"]
+            interval: 5s
+            timeout: 5s
             retries: 5
-            start_period: 30s
+            start_period: 5s
 
     api:
       build: ./services/api
@@ -64,11 +65,11 @@ services:
       volumes:
         - ./services/api:/app/src
       healthcheck:
-       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
-       interval: 1m30s
-       timeout: 30s
+       test: ["CMD-SHELL", "wget -q -O - http://localhost:8080/v1/health > /dev/null || exit 1"]
+       interval: 5s
+       timeout: 5s
        retries: 5
-       start_period: 30s
+       start_period: 5s
 
 
     worker:

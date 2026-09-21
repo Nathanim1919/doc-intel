@@ -1,1 +1,7 @@
 .env
+pgdata/
+redis/
+minio/
+*.exe
+*.test
+bin/
