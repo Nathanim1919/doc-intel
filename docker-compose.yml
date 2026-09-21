@@ -1,0 +1,87 @@
+services:
+    postgres_db:
+        image: postgres:15.0.1
+        environment:
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - POSTGRES_DB=${POSTGRES_DB}
+        ports:
+            - "${POSTGRES_PORT}:5432"
+        volumes:
+            - ./pgdata:/var/lib/postgresql/data
+
+        healthcheck:
+            test: ['pg_isready', '-U', '${POSTGRES_USER}']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+    
+    redis:
+        image: redis:7
+        ports:
+            - "${REDIS_PORT}:6379"
+        volumes:
+            - ./redis:/data
+        healthcheck:
+            test: ['redis-cli', 'ping']
+            interval: 10s
+            timeout: 5s
+            retries: 5
+            start_period: 30s
+
+    minio:
+        image: minio/minio:latest
+        command: server /data --console-address ":9001"
+        ports:
+            - "${MINIO_PORT}:9000"
+            - "9001:9001"
+        volumes:
+            - ./minio:/data
+        environment:
+            - MINIO_ROOT_USER=${MINIO_ROOT_USER}
+            - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}
+        healthcheck:
+            test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+            interval: 1m30s
+            timeout: 30s
+            retries: 5
+            start_period: 30s
+
+    api:
+      build: ./services/api
+      depends_on:
+        postgres_db:
+          condition: service_healthy
+        redis:
+          condition: service_healthy
+        minio:
+          condition: service_healthy
+      env_file:
+        - .env
+      ports:
+        - "${API_PORT}:8080"
+      volumes:
+        - ./services/api:/app/src
+      healthcheck:
+       test: ["CMD", "curl", "-f", "http://localhost:8080/v1/health"]
+       interval: 1m30s
+       timeout: 30s
+       retries: 5
+       start_period: 30s
+
+
+    worker:
+      build: ./services/worker
+      restart: always
+      env_file:
+        - .env
+      depends_on:
+        postgres_db:
+          condition: service_healthy
+        redis:
+          condition: service_healthy
+        minio:
+          condition: service_healthy
+    
+        
