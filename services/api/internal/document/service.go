@@ -222,6 +222,11 @@ func (s *Service) GetJobByDocument(ctx context.Context, docID uuid.UUID) (*model
 	return s.jobRepo.GetByDocumentID(ctx, docID)
 }
 
+// GetJobByID retrieves a job by its primary key.
+func (s *Service) GetJobByID(ctx context.Context, id uuid.UUID) (*models.ProcessingJob, error) {
+	return s.jobRepo.GetByID(ctx, id)
+}
+
 // --- helpers ----------------------------------------------------------------
 
 // hashContent reads all of r into a SHA-256 hash and returns both the hex

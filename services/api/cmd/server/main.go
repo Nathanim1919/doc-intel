@@ -13,6 +13,7 @@ import (
 	"github.com/doc-intel/api/internal/config"
 	"github.com/doc-intel/api/internal/db"
 	"github.com/doc-intel/api/internal/document"
+	"github.com/doc-intel/api/internal/handler"
 	"github.com/doc-intel/api/internal/queue"
 	"github.com/doc-intel/api/internal/storage"
 )
@@ -56,29 +57,26 @@ func main() {
 	defer redisClient.Close()
 	producer := queue.NewRedisProducer(redisClient)
 
-	// --- Repositories & Service ---
+	// --- Repositories ---
 	docRepo := db.NewDocumentRepository(pool)
 	jobRepo := db.NewJobRepository(pool)
-	docService := document.New(pool, docRepo, jobRepo, store, producer)
-	_ = docService // handlers wired in next layer
+	userRepo := db.NewUserRepository(pool)
 
-	// --- HTTP Server ---
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /v1/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintln(w, `{"status":"ok"}`)
-	})
+	// --- Service ---
+	docService := document.New(pool, docRepo, jobRepo, store, producer)
+
+	// --- HTTP Router ---
+	h := handler.New(docService, userRepo, pool, redisClient)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
-		Handler:      mux,
+		Handler:      h.Routes(),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// --- Graceful shutdown ---
+	// --- Graceful Shutdown ---
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
