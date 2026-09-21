@@ -2,11 +2,27 @@
 
 Production-oriented document intelligence pipeline using Go, Python, VLMs, Redis, PostgreSQL, object storage, and automated evaluation.
 
+---
 
+## 🎯 The Real Problem We Solve: Why Build This?
 
+Many ask: *"If Gemini or GPT-4 can read an image and output JSON, why build a document intelligence platform?"*
 
+Because **an LLM is an inference engine, not a production system.** 
 
+### 1. The Core Enterprise Gaps in Raw LLMs:
+- **No Production Resiliency**: Raw API calls fail on rate limits (429), model outages, or network timeouts. DocIntel uses a **Redis FIFO queue + worker cascade** that ensures zero document loss and smooths spiky workloads.
+- **Silent Failures & Hallucinations**: In accounting, finance, or logistics, a 95% accurate model that quietly hallucinates an invoice amount is disastrous. DocIntel computes **calibrated field-level confidence scores** and routes low-confidence extractions into a **Human-in-the-Loop (`REVIEW_REQUIRED`) queue**.
+- **Cost & Deduplication**: Uploading the same document 5 times to an LLM charges you 5 times. DocIntel performs **pre-storage SHA-256 content deduplication**, returning cached results in `0ms` at `$0 cost`.
+- **Model Decoupling**: Business apps connect to a clean Go REST API. The underlying AI model (Gemini, Claude, or local on-prem open weights like Qwen-VL) can be swapped or cascaded with zero client-side code changes.
 
+### 2. The Unfair Market Advantage: Underserved Regional Formats
+Big cloud providers (AWS Textract, Google Cloud Document AI, Rossum) target generic English/Western documents and fail on regional business formats:
+- **Amharic / Ge'ez Script (ፊደል)**: Ethiopian fiscal invoices, customs declarations, contracts, and tax withholding receipts.
+- **Regional Business Standards**: Ethiopian Calendar dates (`ዓ.ም`), Ethiopian Birr (`ETB`) calculations, bilingual English/Amharic headers, and official rubber stamp verifications.
+- **On-Premise / Private Cloud Sovereignty**: Financial institutions and enterprise logistics that cannot send raw financial data to public endpoints can deploy DocIntel fully within private VPCs.
+
+---
 
 Yes. Before writing more daily tasks, I think we should **freeze the architecture and the month-level engineering phases**.
 
