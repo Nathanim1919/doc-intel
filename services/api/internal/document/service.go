@@ -257,6 +257,22 @@ func (s *Service) GetExtractionResults(ctx context.Context, docID uuid.UUID) (*E
 	}, nil
 }
 
+// GetDocumentContent retrieves the raw file reader and MIME type for a document.
+// The caller is responsible for closing the returned io.ReadCloser.
+func (s *Service) GetDocumentContent(ctx context.Context, docID uuid.UUID) (io.ReadCloser, string, error) {
+	doc, err := s.docRepo.GetByID(ctx, docID)
+	if err != nil {
+		return nil, "", err
+	}
+
+	reader, err := s.store.Download(ctx, doc.StorageKey)
+	if err != nil {
+		return nil, "", fmt.Errorf("document: download from storage: %w", err)
+	}
+
+	return reader, doc.MimeType, nil
+}
+
 // --- helpers ----------------------------------------------------------------
 
 // hashContent reads all of r into a SHA-256 hash and returns both the hex

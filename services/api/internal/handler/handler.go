@@ -77,6 +77,7 @@ func (h *Handler) Routes() http.Handler {
 		r.Get("/v1/documents", h.ListDocuments)
 		r.Get("/v1/documents/{id}", h.GetDocument)
 		r.Get("/v1/documents/{id}/status", h.GetDocumentStatus)
+		r.Get("/v1/documents/{id}/content", h.GetDocumentContent)
 		r.Get("/v1/documents/{id}/results", h.GetDocumentResults)
 		r.Get("/v1/jobs/{id}", h.GetJob)
 	})

@@ -204,6 +204,32 @@ func (h *Handler) GetDocumentResults(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toExtractionResultsResponse(results))
 }
 
+// GetDocumentContent handles GET /v1/documents/{id}/content
+// Streams the raw stored document (PDF or image) directly with the proper Content-Type.
+func (h *Handler) GetDocumentContent(w http.ResponseWriter, r *http.Request) {
+	docID, ok := parseUUID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+
+	reader, contentType, err := h.svc.GetDocumentContent(r.Context(), docID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "document not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to read document content")
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "public, max-age=3600")
+	if _, err := io.Copy(w, reader); err != nil {
+		_ = err
+	}
+}
+
 // ListDocuments handles GET /v1/documents?status=QUEUED
 func (h *Handler) ListDocuments(w http.ResponseWriter, r *http.Request) {
 	user := middleware.UserFromContext(r.Context())

@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Header } from "@/components/Header";
 import { UploadDropzone } from "@/components/UploadDropzone";
 import { ResultsViewer } from "@/components/ResultsViewer";
+import { DocumentPreview } from "@/components/DocumentPreview";
 import { RecentDocuments } from "@/components/RecentDocuments";
 import { Sparkles, ArrowRight, ShieldCheck, Zap, Database, Layers } from "lucide-react";
 
@@ -56,59 +57,63 @@ export default function Home() {
       </section>
 
       {/* Main Studio / Live Interactive Area */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          {/* Left Column: Upload & Recent Queue */}
-          <div className="lg:col-span-5 space-y-6">
-            <div className="space-y-2">
-              <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
-                <span>Upload Document</span>
-              </h2>
-              <p className="text-xs text-slate-400">
-                Drop any PDF or image to trigger the asynchronous Gemini extraction worker.
-              </p>
-            </div>
-
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+        {/* Top Section: Upload & Recent History */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-7">
             <UploadDropzone
               onUploaded={(newId) => {
                 setActiveDocId(newId);
               }}
             />
-
+          </div>
+          <div className="lg:col-span-5">
             <RecentDocuments
               onSelect={(id) => setActiveDocId(id)}
               selectedId={activeDocId}
             />
           </div>
+        </div>
 
-          {/* Right Column: Live Extraction Inspector */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="space-y-2">
+        {/* Bottom Section: Side-by-Side Document & Results Inspector */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div className="space-y-0.5">
               <h2 className="text-base font-bold text-white tracking-tight flex items-center gap-2">
                 <Layers className="w-4 h-4 text-indigo-400" />
-                <span>Live Extraction Inspector</span>
+                <span>Side-by-Side Document & Extraction Studio</span>
               </h2>
               <p className="text-xs text-slate-400">
-                Real-time status tracking, model metadata, and structured key-value confidence breakdown.
+                Inspect the original source document alongside extracted fields, calibrated confidence, and model metadata.
               </p>
             </div>
-
-            {activeDocId ? (
-              <ResultsViewer documentId={activeDocId} />
-            ) : (
-              <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-4">
-                <div className="h-12 w-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
-                  <Layers className="w-6 h-6" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-semibold text-slate-300">No document selected</h3>
-                  <p className="text-xs text-slate-500 max-w-sm">
-                    Upload a new document on the left or select an existing one from recent ingestions to view extraction results.
-                  </p>
-                </div>
-              </div>
-            )}
           </div>
+
+          {activeDocId ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left Pane: Original Document Preview */}
+              <div className="lg:col-span-6">
+                <DocumentPreview documentId={activeDocId} />
+              </div>
+
+              {/* Right Pane: Extracted Fields & Metadata */}
+              <div className="lg:col-span-6">
+                <ResultsViewer documentId={activeDocId} />
+              </div>
+            </div>
+          ) : (
+            <div className="bg-slate-950/40 border border-dashed border-slate-800 rounded-3xl p-16 text-center flex flex-col items-center justify-center space-y-4">
+              <div className="h-12 w-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-500">
+                <Layers className="w-6 h-6" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold text-slate-300">No document selected</h3>
+                <p className="text-xs text-slate-500 max-w-sm">
+                  Upload a document above or click any item in Recent Ingestions to inspect the original file and extracted key-value fields.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 

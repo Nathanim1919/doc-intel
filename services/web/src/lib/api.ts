@@ -86,3 +86,18 @@ export async function listDocuments(status?: string): Promise<{ documents: Docum
 
   return res.json();
 }
+
+export async function getDocumentContentBlob(id: string): Promise<{ blob: Blob; contentType: string }> {
+  const res = await fetch(`${API_BASE}/documents/${id}/content`, {
+    headers: getHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Failed to fetch document content: ${res.statusText}`);
+  }
+
+  const contentType = res.headers.get("Content-Type") || "application/octet-stream";
+  const blob = await res.blob();
+  return { blob, contentType };
+}
+
