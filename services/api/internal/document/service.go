@@ -273,6 +273,40 @@ func (s *Service) GetDocumentContent(ctx context.Context, docID uuid.UUID) (io.R
 	return reader, doc.MimeType, nil
 }
 
+// UpdateField allows human reviewers to correct or override an extracted field value.
+// It sets the field's validation_status to PASSED.
+func (s *Service) UpdateField(ctx context.Context, fieldID uuid.UUID, value string) (*models.ExtractionField, error) {
+	return s.extractionRepo.UpdateField(ctx, fieldID, value, "PASSED")
+}
+
+// ApproveDocument transitions a document from REVIEW_REQUIRED to COMPLETED.
+// It verifies that no fields in the latest run remain in FAILED status.
+func (s *Service) ApproveDocument(ctx context.Context, docID uuid.UUID) (*models.Document, error) {
+	doc, err := s.docRepo.GetByID(ctx, docID)
+	if err != nil {
+		return nil, err
+	}
+
+	if doc.Status != models.StatusReviewRequired {
+		return nil, fmt.Errorf("document: cannot approve document in %s status (must be REVIEW_REQUIRED)", doc.Status)
+	}
+
+	unapproved, err := s.extractionRepo.CountUnapprovedFieldsByDocument(ctx, docID)
+	if err != nil {
+		return nil, err
+	}
+	if unapproved > 0 {
+		return nil, fmt.Errorf("document: cannot approve — %d field(s) still require review", unapproved)
+	}
+
+	if err := s.docRepo.UpdateStatus(ctx, docID, models.StatusReviewRequired, models.StatusCompleted); err != nil {
+		return nil, fmt.Errorf("document: update status to completed: %w", err)
+	}
+
+	doc.Status = models.StatusCompleted
+	return doc, nil
+}
+
 // --- helpers ----------------------------------------------------------------
 
 // hashContent reads all of r into a SHA-256 hash and returns both the hex

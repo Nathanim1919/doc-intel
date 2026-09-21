@@ -75,6 +75,46 @@ func (r *ExtractionRepository) GetFieldsByRun(ctx context.Context, runID uuid.UU
 	return fields, rows.Err()
 }
 
+// UpdateField modifies the extracted value and validation_status of a specific field.
+func (r *ExtractionRepository) UpdateField(ctx context.Context, fieldID uuid.UUID, value string, status string) (*models.ExtractionField, error) {
+	const q = `
+		UPDATE extraction_fields
+		   SET value = $2,
+		       validation_status = $3
+		 WHERE id = $1
+		RETURNING id, extraction_run_id, field_name, value,
+		          raw_confidence, computed_confidence, validation_status, page_number
+	`
+	row := r.db.QueryRow(ctx, q, fieldID, value, status)
+	f := &models.ExtractionField{}
+	if err := row.Scan(
+		&f.ID, &f.ExtractionRunID, &f.FieldName, &f.Value,
+		&f.RawConfidence, &f.ComputedConfidence, &f.ValidationStatus, &f.PageNumber,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
+		return nil, fmt.Errorf("db: update field: %w", err)
+	}
+	return f, nil
+}
+
+// CountUnapprovedFieldsByDocument counts how many fields in the document's latest run are in FAILED status.
+func (r *ExtractionRepository) CountUnapprovedFieldsByDocument(ctx context.Context, docID uuid.UUID) (int, error) {
+	const q = `
+		SELECT COUNT(*)
+		  FROM extraction_fields f
+		  JOIN extraction_runs r ON f.extraction_run_id = r.id
+		 WHERE r.document_id = $1
+		   AND f.validation_status = 'FAILED'
+	`
+	var count int
+	if err := r.db.QueryRow(ctx, q, docID).Scan(&count); err != nil {
+		return 0, fmt.Errorf("db: count unapproved fields: %w", err)
+	}
+	return count, nil
+}
+
 // --- scan helpers -----------------------------------------------------------
 
 func scanRun(row pgx.Row) (*models.ExtractionRun, error) {

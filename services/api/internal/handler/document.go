@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -228,6 +229,67 @@ func (h *Handler) GetDocumentContent(w http.ResponseWriter, r *http.Request) {
 	if _, err := io.Copy(w, reader); err != nil {
 		_ = err
 	}
+}
+
+// updateFieldRequest carries the corrected value for an extracted field.
+type updateFieldRequest struct {
+	Value string `json:"value"`
+}
+
+// UpdateField handles PATCH /v1/documents/{id}/fields/{fieldId}
+// Updates an extracted field's value and marks its validation_status as PASSED.
+func (h *Handler) UpdateField(w http.ResponseWriter, r *http.Request) {
+	fieldID, ok := parseUUID(w, chi.URLParam(r, "fieldId"))
+	if !ok {
+		return
+	}
+
+	var req updateFieldRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "invalid JSON body")
+		return
+	}
+
+	field, err := h.svc.UpdateField(r.Context(), fieldID, req.Value)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "field not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "failed to update field")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, extractionFieldResponse{
+		ID:                 field.ID.String(),
+		FieldName:          field.FieldName,
+		Value:              field.Value,
+		RawConfidence:      field.RawConfidence,
+		ComputedConfidence: field.ComputedConfidence,
+		ValidationStatus:   field.ValidationStatus,
+		PageNumber:         field.PageNumber,
+	})
+}
+
+// ApproveDocument handles POST /v1/documents/{id}/approve
+// Transitions a document from REVIEW_REQUIRED to COMPLETED.
+func (h *Handler) ApproveDocument(w http.ResponseWriter, r *http.Request) {
+	docID, ok := parseUUID(w, chi.URLParam(r, "id"))
+	if !ok {
+		return
+	}
+
+	doc, err := h.svc.ApproveDocument(r.Context(), docID)
+	if err != nil {
+		if errors.Is(err, db.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "document not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "APPROVAL_FAILED", err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, toDocumentResponse(doc))
 }
 
 // ListDocuments handles GET /v1/documents?status=QUEUED

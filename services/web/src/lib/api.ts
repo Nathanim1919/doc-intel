@@ -101,3 +101,40 @@ export async function getDocumentContentBlob(id: string): Promise<{ blob: Blob; 
   return { blob, contentType };
 }
 
+export async function updateDocumentField(
+  documentId: string,
+  fieldId: string,
+  value: string
+): Promise<ExtractionResults["fields"][0]> {
+  const res = await fetch(`${API_BASE}/documents/${documentId}/fields/${fieldId}`, {
+    method: "PATCH",
+    headers: getHeaders({
+      "Content-Type": "application/json",
+    }),
+    body: JSON.stringify({ value }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Failed to update field: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
+export async function approveDocument(documentId: string): Promise<DocumentItem> {
+  const res = await fetch(`${API_BASE}/documents/${documentId}/approve`, {
+    method: "POST",
+    headers: getHeaders({
+      "Content-Type": "application/json",
+    }),
+  });
+
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.error?.message || `Failed to approve document: ${res.statusText}`);
+  }
+
+  return res.json();
+}
+
