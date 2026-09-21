@@ -1,5 +1,6 @@
 """Entry point for the doc-intel worker service."""
 
+import utils.session
 import logging
 import sys
 
